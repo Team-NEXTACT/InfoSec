@@ -1,8 +1,8 @@
 {
   "files": {
-    "main.js": "https://team-nextact.github.io/infosec/static/js/main.c0733f61.js",
-    "index.html": "https://team-nextact.github.io/infosec/index.html",
-    "main.c0733f61.js.map": "https://team-nextact.github.io/infosec/static/js/main.c0733f61.js.map"
+    "main.js": "/infosec/static/js/main.c0733f61.js",
+    "index.html": "/infosec/index.html",
+    "main.c0733f61.js.map": "/infosec/static/js/main.c0733f61.js.map"
   },
   "entrypoints": [
     "static/js/main.c0733f61.js"
