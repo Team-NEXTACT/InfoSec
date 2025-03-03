@@ -8,8 +8,18 @@
 	<body>
 		<script>
       let redirectTo = window.location.pathname + window.location.search;
+
+      if (redirectTo.startsWith('/infosec/')) {
+        redirectTo = redirectTo.replace('/infosec', '');
+      }
+
+      if (!redirectTo.startsWith('/')) {
+        redirectTo = '/' + redirectTo;
+      }
+
       sessionStorage.setItem('redirectPath', redirectTo);
-      window.location.replace(window.location.origin + '/infosec/');
+
+      window.location.replace('/infosec/');
 		</script>
 	</body>
 </html>
