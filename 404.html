@@ -9,7 +9,7 @@
 		<script>
       let redirectTo = window.location.pathname + window.location.search;
       sessionStorage.setItem('redirectPath', redirectTo);
-      window.location.replace('/infosec/');
+      window.location.replace(window.location.origin + '/infosec/');
 		</script>
 	</body>
 </html>
