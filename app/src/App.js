@@ -31,7 +31,7 @@ const theme = createTheme({
 function App() {
   return (
     <ThemeProvider theme={theme}>
-      <Router>
+      <Router basename='/infosec'>
         <Layout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
