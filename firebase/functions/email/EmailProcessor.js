@@ -34,83 +34,61 @@ class EmailProcessor {
     const response = await this.gmail.users.messages.list({
       userId: "me",
       q: query,
-      maxResults: 30,
+      maxResults: 5,
     });
 
     return response.data.messages || [];
   }
 
   async processEmails(messages, userId) {
-    const batch = db.batch();
-    const urlBatch = db.batch();
-    const attachmentBatch = db.batch();
+    let batch = db.batch();
 
-    const emailPromises = messages.map(async (message) => {
+    for await (const message of messages) {
       const emailData = (await this.gmail.users.messages.get({
         userId: "me",
         id: message.id,
+        format: "full",
       })).data;
 
-      const emailId = randomCodeGenerator("email_");  // ✨ 랜덤 ID 사용
-      const urls = extractUrls(emailData) || [];  // ✅ undefined 방지
-      const attachments = extractAttachments(emailData) || [];  // ✅ undefined 방지
+      const emailId = randomCodeGenerator("email_");
 
-      const urlIds = urls.length > 0 ? urls.map(() => randomCodeGenerator("url_")) : [];  // ✅ 빈 배열이면 map() 실행 안 함
-      const attachmentIds = attachments.length > 0 ? attachments.map(() => randomCodeGenerator("pdf_")) : [];  // ✅ 빈 배열이면 map() 실행 안 함
+      // 📌 URL & 첨부파일 분석을 병렬 처리하여 성능 향상
+      const [urls, attachments] = await Promise.all([
+        extractUrls(emailData),
+        extractAttachments(emailData),
+      ]);
 
-      // 📌 이메일 저장 (랜덤 ID)
+      // 📌 Firestore에는 분석된 데이터만 저장 (파일 X)
       const emailRef = db.collection("emails").doc(emailId);
       batch.set(emailRef, {
         id: emailId,
         user_id: userId,
-        sender: emailData.payload.headers.find(h => h.name === "From")?.value || "Unknown",
-        subject: emailData.payload.headers.find(h => h.name === "Subject")?.value || "No Subject",
-        spf: "",
-        dkim: "",
-        dmars: "",
+        sender: emailData.payload.headers.find((h) => h.name === "From")?.value || "Unknown",
+        receiver: emailData.payload.headers.find((h) => h.name === "To")?.value || "Unknown",
+        subject: emailData.payload.headers.find((h) => h.name === "Subject")?.value || "No Subject",
         received_at: Math.floor(emailData.internalDate / 1000),
-        analyzed: false,
-        analyzed_at: Math.floor(Date.now() / 1000), // ✅ 현재 시간을 초 단위 UNIX 타임스탬프로 저장
-        has_risky_attachment: attachmentIds.length > 0,
-        has_risky_url: urlIds.length > 0,
-        attachment_ids: attachmentIds,
-        url_ids: urlIds,
+        analyzed: true,
+        analyzed_at: Math.floor(Date.now() / 1000),
+        has_risky_attachment: attachments.length > 0,
+        has_risky_url: urls.length > 0,
+        attachment_data: attachments, // 파일 원본이 아니라 분석 결과만 저장
+        url_data: urls, // URL 원본이 아니라 위험도 정보만 저장
+        email_risk: this.assessEmailRisk(attachments, urls),
       });
 
-      // 📌 URL 분석 문서 저장 (랜덤 ID)
-      urls.forEach((url, index) => {
-        const urlRef = db.collection("url_analysis").doc(urlIds[index]);
-        urlBatch.set(urlRef, {
-          id: urlIds[index],
-          address: url,
-          virus_total_score: null,
-          virus_total_results: {},
-          redirects: [],
-          whois: {},
-          overall_risk: "pending",
-        });
-      });
-
-      // 📌 첨부파일 분석 문서 저장 (랜덤 ID)
-      attachments.forEach((att, index) => {
-        const attachmentRef = db.collection("attachment_analysis").doc(attachmentIds[index]);
-        attachmentBatch.set(attachmentRef, {
-          id: attachmentIds[index],
-          file_name: att.file_name,
-          file_type: "pdf",
-          hash: att.hash,
-          total_pages: att.total_pages,
-          virus_total_score: null,
-          pdf_analysis: {},
-          overall_risk: "pending",
-        });
-      });
-    });
-
-    await Promise.all(emailPromises);
+    }
     await batch.commit();
-    await urlBatch.commit();
-    await attachmentBatch.commit();
+  }
+
+  assessEmailRisk(attachments, urls) {
+    let riskLevel = "안전";
+    if (attachments.length > 0 || urls.some((u) => u.risk_level === "의심")) {
+      riskLevel = "의심";
+    }
+    if (attachments.some((att) => att.hash === "known_malicious_hash")) {
+      riskLevel = "위험";
+    }
+    return riskLevel;
   }
 }
 
