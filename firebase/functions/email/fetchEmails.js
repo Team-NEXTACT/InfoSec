@@ -18,7 +18,6 @@ exports.fetchEmails = async (req, res) => {
 
     await processor.processEmails(messages, userId);
     res.status(200).send({message: "이메일 저장 및 분석 준비 완료"});
-
   } catch (error) {
     console.error("이메일 처리 중 오류 발생:", error);
     res.status(500).send({error: error.message});
