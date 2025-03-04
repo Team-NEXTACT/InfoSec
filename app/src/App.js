@@ -6,6 +6,7 @@ import {Dashboard} from "./pages/Dashboard";
 import {AnalysisDetail} from "./pages/AnalysisDetail";
 import {Settings} from "./pages/Settings";
 import LandingPage from "./pages/LandingPage";
+import LoadingPage from "./pages/LoadingPage";
 
 const theme = createTheme({
   palette: {
@@ -47,6 +48,7 @@ function App() {
           <RedirectHandler/>
           <Routes>
             <Route path="/" element={<LandingPage/>}/>
+            <Route path="/loading" element={<LoadingPage/>}/>
             <Route path="/dashboard" element={
               <Layout>
                 <Dashboard/>
