@@ -13,19 +13,61 @@ exports.extractAttachments = async (emailData) => {
     for (const part of emailData.payload.parts) {
       if (part.mimeType === "application/pdf" && part.body && part.body.data) {
         const fileBuffer = Buffer.from(part.body.data, "base64");
-        const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-        const {totalPages, hasJavaScript, detectedScripts} = await analyzePDF(fileBuffer);
+
+        // ✅ 파일 크기 (KB 기준)
+        const fileSize = (fileBuffer.length / 1024).toFixed(2) + "KB";
+
+        // ✅ 해시값 생성 (MD5, SHA1, SHA256)
+        const fileHash = {
+          md5: crypto.createHash("md5").update(fileBuffer).digest("hex"),
+          sha1: crypto.createHash("sha1").update(fileBuffer).digest("hex"),
+          sha256: crypto.createHash("sha256").update(fileBuffer).digest("hex"),
+        };
+
+        // ✅ PDF 내 악성 코드 검사
+        const {hasJavaScript, detectedScripts} = await analyzePDF(fileBuffer);
         const containsShellcode = await detectShellcode(fileBuffer);
 
-        // Firestore에는 파일을 저장하지 않고 분석 결과만 저장
+        // ✅ 의심 요소 분석 (MockResult 구조에 맞춤)
+        let securityLevel = "safe"; // 기본값
+        let securityReason = "정상적인 파일입니다.";
+        let suspiciousElements = {};
+
+        if (hasJavaScript || containsShellcode) {
+          securityLevel = "dangerous";
+          securityReason = "PDF 내부에 악성 코드 포함";
+
+          suspiciousElements = {
+            pdfbox_analysis: {
+              embedded_scripts: hasJavaScript,
+              action_details: detectedScripts.length > 0 ? detectedScripts[0] : "N/A",
+              suspicious_elements: [],
+            },
+          };
+
+          if (hasJavaScript) {
+            suspiciousElements.pdfbox_analysis.suspicious_elements.push({
+              element: "JavaScript",
+              description: "PDF 내부에서 JavaScript가 실행될 가능성이 있음.",
+            });
+          }
+
+          if (containsShellcode) {
+            suspiciousElements.pdfbox_analysis.suspicious_elements.push({
+              element: "Shellcode",
+              description: "쉘코드가 포함되어 실행 가능성이 있는 코드가 탐지됨.",
+            });
+          }
+        }
+
+        // ✅ Firestore 저장용 객체 (mockResult 구조 맞춤)
         attachments.push({
-          file_name: part.filename,
-          file_type: "pdf",
-          hash: hash,
-          total_pages: totalPages, // PDF 페이지 수 저장
-          has_javascript: hasJavaScript, // JavaScript 포함 여부
-          detected_scripts: detectedScripts, // 감지된 스크립트 내용 일부
-          contains_shellcode: containsShellcode, // Shellcode 포함 여부
+          fileName: part.filename,
+          fileSize: fileSize,
+          fileHash: fileHash,
+          securityLevel: securityLevel,
+          securityReason: securityReason,
+          suspiciousElements: suspiciousElements,
         });
       }
     }
@@ -59,5 +101,5 @@ async function analyzePDF(pdfBuffer) {
     });
   }
 
-  return {totalPages: pdf.numPages, hasJavaScript, detectedScripts};
+  return {hasJavaScript, detectedScripts};
 }

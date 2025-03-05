@@ -22,8 +22,7 @@
     "googleapis": "^146.0.0",
     "mailauth": "^4.8.2",
     "pdfjs-dist": "^4.10.38",
-    "valid-url": "^1.0.9",
-    "whois-json": "^2.0.4"
+    "valid-url": "^1.0.9"
   },
   "devDependencies": {
     "eslint": "^8.15.0",

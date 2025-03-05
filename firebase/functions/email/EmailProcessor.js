@@ -1,4 +1,5 @@
 const admin = require("firebase-admin");
+const {Timestamp} = require("firebase-admin/firestore")
 const {google} = require("googleapis");
 const {getGoogleAuth} = require("../utils/googleAuth");
 const {extractUrls} = require("../utils/urlExtractor");
@@ -44,11 +45,13 @@ class EmailProcessor {
     let batch = db.batch();
 
     for await (const message of messages) {
-      const emailData = (await this.gmail.users.messages.get({
-        userId: "me",
-        id: message.id,
-        format: "full",
-      })).data;
+      const emailData = (
+          await this.gmail.users.messages.get({
+            userId: "me",
+            id: message.id,
+            format: "full",
+          })
+      ).data;
 
       const emailId = randomCodeGenerator("email_");
 
@@ -58,7 +61,7 @@ class EmailProcessor {
         extractAttachments(emailData),
       ]);
 
-      // 📌 Firestore에는 분석된 데이터만 저장 (파일 X)
+      // 📌 Firestore 저장
       const emailRef = db.collection("emails").doc(emailId);
       batch.set(emailRef, {
         id: emailId,
@@ -68,26 +71,48 @@ class EmailProcessor {
         subject: emailData.payload.headers.find((h) => h.name === "Subject")?.value || "No Subject",
         received_at: Math.floor(emailData.internalDate / 1000),
         analyzed: true,
-        analyzed_at: Math.floor(Date.now() / 1000),
-        has_risky_attachment: attachments.length > 0,
-        has_risky_url: urls.length > 0,
-        attachment_data: attachments, // 파일 원본이 아니라 분석 결과만 저장
-        url_data: urls, // URL 원본이 아니라 위험도 정보만 저장
+        analyzed_at: Timestamp.now(),
+        has_risky_attachment: attachments.some((att) => att.securityLevel === "dangerous"),
+        has_risky_url: urls.some((url) => url.isPhishingUrl === true),
+        attachment_data: attachments,
+        url_data: urls.map(({address, domain, ipAddress, ipInfo, isPhishingUrl}) => ({
+          address,
+          domain,
+          ipAddress,
+          ipInfo,
+          isPhishingUrl,
+        })), // WHOIS 관련 정보 제거
         email_risk: this.assessEmailRisk(attachments, urls),
       });
-
     }
+
+    // ✅ 배치 커밋 + last_analysis_at 업데이트
     await batch.commit();
+    await db.collection("users").doc(userId).update(
+        {last_analysis_at: Timestamp.now()});
   }
 
+  /**
+   * 📌 이메일의 전체 위험 수준을 평가하는 함수
+   * @param {Array} attachments - 분석된 첨부파일 리스트
+   * @param {Array} urls - 분석된 URL 리스트
+   * @returns {string} 위험 수준 ("safe" | "suspicious" | "dangerous")
+   */
   assessEmailRisk(attachments, urls) {
-    let riskLevel = "안전";
-    if (attachments.length > 0 || urls.some((u) => u.risk_level === "의심")) {
-      riskLevel = "의심";
+    let riskLevel = "safe";
+
+    // 1️⃣ 첨부파일 분석 결과 반영
+    if (attachments.some((att) => att.securityLevel === "dangerous")) {
+      riskLevel = "dangerous";
+    } else if (attachments.some((att) => att.securityLevel === "suspicious")) {
+      riskLevel = "suspicious";
     }
-    if (attachments.some((att) => att.hash === "known_malicious_hash")) {
-      riskLevel = "위험";
+
+    // 2️⃣ URL 분석 결과 반영
+    if (urls.some((url) => url.isPhishingUrl === true)) {
+      riskLevel = "dangerous";
     }
+
     return riskLevel;
   }
 }
