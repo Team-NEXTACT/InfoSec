@@ -10,9 +10,14 @@ export const Layout = ({ children }) => {
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <AppBar position="static">
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ cursor: 'pointer', flexGrow: 1 }} onClick={() => navigate('/dashboard')} >   
-            PDF 피싱 분석 시스템
-          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, cursor: 'pointer' }} onClick={() => navigate('/')}>
+            <Typography variant="h6" component="div">   
+              PDFense
+            </Typography>
+            <Typography variant="subtitle2" component="div">
+              이메일 위험 요소 분석
+            </Typography>
+          </Box>
           <IconButton color="inherit" onClick={() => navigate('/settings')} aria-label="설정">
             <SettingsIcon />
           </IconButton>
@@ -24,7 +29,7 @@ export const Layout = ({ children }) => {
       <Box component="footer" sx={{ py: 3, bgcolor: 'background.paper' }}>
         <Container maxWidth="sm">
           <Typography variant="body2" color="text.secondary" align="center">
-            © 2025 이메일 연동 기반 피싱 및 악성 PDF 탐지 시스템
+            © 2025 이메일 연동 기반 피싱 URL 및 악성 PDF 탐지 시스템
           </Typography>
         </Container>
       </Box>
